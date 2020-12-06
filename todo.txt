@@ -1,0 +1,10 @@
+1. check env vars
+  - export VAULT_ADDR='https://vault.uscis.dhs.gov'
+  - export VAULT_NAMESPACE='DID-IT_nonprod'
+  - export VAULT_ROLE_ID='09383ecf-3776-f2b3-42ea-baae331d06d9'
+  - export VAULT_SECRET_ID='c86eda86-bc61-d5ac-6ec6-863b48886a17'
+2. verify params
+  - vault [item,item]
+3. get chef vault item info
+  - knife vault show icam_test oithr --format json
+4. add info to nautilus

@@ -31,6 +31,7 @@ func checkenv() error {
 	return nil
 }
 
+// params returns an error if the vault name is not set.
 func params() error {
 	flag.StringVar(&vault, "vault", "", "(required) vault name")
 	itemStr := flag.String("items", "", "(optional) comma separated list of vault items "+
@@ -57,6 +58,7 @@ func params() error {
 	return nil
 }
 
+// validate checks for required settings and prints appropriate usage help.
 func validate() {
 	var errs int
 
@@ -79,7 +81,6 @@ func validate() {
 }
 
 func main() {
-	fmt.Println(os.Environ())
 	validate()
 
 	fmt.Printf("vault name: %s\n", vault)

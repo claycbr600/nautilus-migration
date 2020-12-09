@@ -8,10 +8,33 @@ import (
 	"strings"
 )
 
-var (
+type config struct {
 	vault string
 	items []string
-)
+}
+
+type parameter interface {
+	name() string
+	flags() []string
+	vaultItems(string) ([]byte, error)
+}
+
+type param struct {
+	progname string
+	args     []string
+}
+
+func (p param) name() string {
+	return p.progname
+}
+
+func (p param) flags() []string {
+	return p.args
+}
+
+func (p param) vaultItems(vault string) ([]byte, error) {
+	return exec.Command("knife", "vault", "show", vault).Output()
+}
 
 // checkenv returns an error if required environment variables are not set.
 func checkenv() error {
@@ -32,34 +55,39 @@ func checkenv() error {
 }
 
 // params returns an error if the vault name is not set.
-func params() error {
-	flag.StringVar(&vault, "vault", "", "(required) vault name")
-	itemStr := flag.String("items", "", "(optional) comma separated list of vault items "+
+func parseParams(p parameter) (config, error) {
+	var conf config
+	var itemstr string
+
+	flags := flag.NewFlagSet(p.name(), flag.ContinueOnError)
+
+	flags.StringVar(&conf.vault, "vault", "", "(required) vault name")
+	flags.StringVar(&itemstr, "items", "", "(optional) comma separated list of vault items "+
 		"[omit for all]")
-	flag.Parse()
+	flags.Parse(p.flags())
 
-	if vault == "" {
-		return fmt.Errorf("Must supply a vault name")
+	if conf.vault == "" {
+		return conf, fmt.Errorf("Must supply a vault name")
 	}
 
-	if *itemStr != "" {
-		items = strings.Split(*itemStr, ",")
-		return nil
+	if itemstr != "" {
+		conf.items = strings.Split(itemstr, ",")
+		return conf, nil
 	}
 
-	out, err := exec.Command("knife", "vault", "show", vault).Output()
+	out, err := p.vaultItems(conf.vault)
 	if err != nil {
-		return err
+		return conf, err
 	}
 
 	s := strings.Trim(string(out), "\n")
-	items = strings.Split(s, "\n")
+	conf.items = strings.Split(s, "\n")
 
-	return nil
+	return conf, nil
 }
 
 // validate checks for required settings and prints appropriate usage help.
-func validate() {
+func validate() config {
 	var errs int
 
 	// check for required env vars
@@ -69,7 +97,9 @@ func validate() {
 	}
 
 	// check params
-	if err := params(); err != nil {
+	p := param{progname: os.Args[0], args: os.Args[1:]}
+	conf, err := parseParams(p)
+	if err != nil {
 		fmt.Println(err)
 		flag.Usage()
 		errs++
@@ -78,13 +108,15 @@ func validate() {
 	if errs > 0 {
 		os.Exit(1)
 	}
+
+	return conf
 }
 
 func main() {
-	validate()
+	conf := validate()
 
-	fmt.Printf("vault name: %s\n", vault)
-	fmt.Printf("vault items: %v\n", items)
+	fmt.Printf("vault name: %s\n", conf.vault)
+	fmt.Printf("vault items: %v\n", conf.items)
 
 	fmt.Println("got here")
 }

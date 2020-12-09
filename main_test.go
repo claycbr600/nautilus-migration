@@ -51,25 +51,6 @@ func TestCheckenv(t *testing.T) {
 	}
 }
 
-type mockparam struct {
-	progname string
-	args     []string
-}
-
-func (mp mockparam) name() string {
-	return mp.progname
-}
-
-func (mp mockparam) flags() []string {
-	return mp.args
-}
-
-func (p mockparam) vaultItems(_ string) ([]byte, error) {
-	return []byte(mockitemstr), nil
-}
-
-var mockitemstr string
-
 func TestParams(t *testing.T) {
 	var tests = []struct {
 		flags   []string
@@ -98,8 +79,13 @@ func TestParams(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		mp := mockparam{progname: "progname", args: test.flags}
-		mockitemstr = test.itemstr
+		mp := param{
+			progname: "progname",
+			args:     test.flags,
+			vitems: func(_ string) ([]byte, error) {
+				return []byte(test.itemstr), nil
+			},
+		}
 
 		conf, err := parseParams(mp)
 		if err == nil {

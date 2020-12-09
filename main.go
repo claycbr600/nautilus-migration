@@ -13,27 +13,10 @@ type config struct {
 	items []string
 }
 
-type parameter interface {
-	name() string
-	flags() []string
-	vaultItems(string) ([]byte, error)
-}
-
 type param struct {
 	progname string
 	args     []string
-}
-
-func (p param) name() string {
-	return p.progname
-}
-
-func (p param) flags() []string {
-	return p.args
-}
-
-func (p param) vaultItems(vault string) ([]byte, error) {
-	return exec.Command("knife", "vault", "show", vault).Output()
+	vitems   func(string) ([]byte, error)
 }
 
 // checkenv returns an error if required environment variables are not set.
@@ -54,17 +37,21 @@ func checkenv() error {
 	return nil
 }
 
+func vaultItems(vault string) ([]byte, error) {
+	return exec.Command("knife", "vault", "show", vault).Output()
+}
+
 // params returns an error if the vault name is not set.
-func parseParams(p parameter) (config, error) {
+func parseParams(p param) (config, error) {
 	var conf config
 	var itemstr string
 
-	flags := flag.NewFlagSet(p.name(), flag.ContinueOnError)
+	flags := flag.NewFlagSet(p.progname, flag.ContinueOnError)
 
 	flags.StringVar(&conf.vault, "vault", "", "(required) vault name")
 	flags.StringVar(&itemstr, "items", "", "(optional) comma separated list of vault items "+
 		"[omit for all]")
-	flags.Parse(p.flags())
+	flags.Parse(p.args)
 
 	if conf.vault == "" {
 		return conf, fmt.Errorf("Must supply a vault name")
@@ -75,7 +62,7 @@ func parseParams(p parameter) (config, error) {
 		return conf, nil
 	}
 
-	out, err := p.vaultItems(conf.vault)
+	out, err := p.vitems(conf.vault)
 	if err != nil {
 		return conf, err
 	}
@@ -97,7 +84,7 @@ func validate() config {
 	}
 
 	// check params
-	p := param{progname: os.Args[0], args: os.Args[1:]}
+	p := param{progname: os.Args[0], args: os.Args[1:], vitems: vaultItems}
 	conf, err := parseParams(p)
 	if err != nil {
 		fmt.Println(err)
@@ -117,6 +104,5 @@ func main() {
 
 	fmt.Printf("vault name: %s\n", conf.vault)
 	fmt.Printf("vault items: %v\n", conf.items)
-
 	fmt.Println("got here")
 }

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,6 +19,19 @@ type param struct {
 	progname string
 	args     []string
 	vitems   func(string) ([]byte, error)
+}
+
+type tlsEntry struct {
+	id  string
+	crt string
+	key string
+}
+
+type icamEntry struct {
+	idp_cert                      string
+	issuer_cert                   string
+	issuer_private_key            string
+	issuer_private_key_passphrase string
 }
 
 // checkenv returns an error if required environment variables are not set.
@@ -104,5 +119,18 @@ func main() {
 
 	fmt.Printf("vault name: %s\n", conf.vault)
 	fmt.Printf("vault items: %v\n", conf.items)
-	fmt.Println("got here")
+
+	for _, item := range conf.items {
+		go func(vault, item string) {
+			out, err := exec.Command("knife", "vault", "show", vault, item, "--format", "json").Output()
+			if err != nil {
+				log.Println(err)
+			}
+
+			var data map[string]string
+			json.Unmarshal(out, &data)
+		}(conf.vault, item)
+	}
+
+	fmt.Println("main end")
 }

@@ -1,3 +1,4 @@
+// GOOS=linux GOARCH=amd64 go build main.go
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 type config struct {
@@ -114,23 +116,51 @@ func validate() config {
 	return conf
 }
 
+func populate(ch chan<- string, items []string) {
+	for i, it := range items {
+		fmt.Printf("%d. %s\n", i, it)
+		ch <- it
+	}
+	close(ch)
+}
+
+func syncVault(vault, item string) {
+	out, err := exec.Command("knife", "vault", "show", vault, item, "--format", "json").Output()
+	if err != nil {
+		log.Println(err)
+	}
+
+	fmt.Println("retrieved", item)
+	var data map[string]string
+	json.Unmarshal(out, &data)
+}
+
+func workers(ch <-chan string, vault string) {
+	var wg sync.WaitGroup
+	count := 3
+	wg.Add(count)
+
+	for i := 0; i < count; i++ {
+		go func(vault string) {
+			for item := range ch {
+				syncVault(vault, item)
+			}
+
+			wg.Done()
+		}(vault)
+	}
+
+	wg.Wait()
+}
+
 func main() {
 	conf := validate()
 
 	fmt.Printf("vault name: %s\n", conf.vault)
 	fmt.Printf("vault items: %v\n", conf.items)
 
-	for _, item := range conf.items {
-		go func(vault, item string) {
-			out, err := exec.Command("knife", "vault", "show", vault, item, "--format", "json").Output()
-			if err != nil {
-				log.Println(err)
-			}
-
-			var data map[string]string
-			json.Unmarshal(out, &data)
-		}(conf.vault, item)
-	}
-
+	ch := make(chan string)
+	go populate(ch, conf.items)
+	workers(ch, conf.vault)
 	fmt.Println("main end")
 }
